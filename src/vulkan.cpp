@@ -195,7 +195,6 @@ uint32_t VulkanState::findMemoryType(uint32_t mask, vk::MemoryPropertyFlags requ
 		}
 	}
 	assertThat(false, "Could not find usable memory type");
-	abort();
 }
 
 
@@ -213,6 +212,7 @@ vk::UniqueImageView VulkanState::createImageView(vk::Image image, vk::Format for
 }
 
 vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCode, std::vector<uint8_t> fragmentShaderCode, vk::PrimitiveTopology topology) {
+	assertThat(renderpass, "Surface must be set before making pipeline\n");
 	auto vertexModule = makeShaderModule(vertexShaderCode);
 	auto fragmentModule = makeShaderModule(fragmentShaderCode);
 
@@ -315,8 +315,57 @@ vk::UniqueShaderModule VulkanState::makeShaderModule(std::vector<uint8_t> &code)
 	return device->createShaderModuleUnique(moduleInfo);
 }
 
+BufferAndMemory VulkanState::createBufferWithData(vk::BufferUsageFlags usage, size_t size, uint8_t *data) {
+	BufferAndMemory buffer{};
+
+	vk::BufferCreateInfo bufferInfo{};
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	buffer.buffer = device->createBufferUnique(bufferInfo);
+
+	auto requirements = device->getBufferMemoryRequirements(*buffer.buffer);
+	vk::MemoryAllocateInfo allocateInfo{
+		requirements.size,
+		findMemoryType(
+			requirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		)
+	};
+	buffer.memory = device->allocateMemoryUnique(allocateInfo);
+
+	device->bindBufferMemory(*buffer.buffer, *buffer.memory, 0);
+
+	// Write inital data to buffer
+	void *mapped = device->mapMemory(*buffer.memory, 0, size, {});
+	memcpy(mapped, data, size);
+	device->unmapMemory(*buffer.memory);
+	// TODO: should maybe be using a staging buffer to copy to device local memory
+
+	return buffer;
+}
+
+
 VulkanState::~VulkanState() {
 	if (surface) {
 		vkDestroySurfaceKHR(*instance, surface, nullptr);
 	}
+}
+
+
+
+UploadedModel UploadedModel::fromModel(Model &model, VulkanState &vulkan) {
+	auto vertices = vulkan.createBufferWithData(
+		vk::BufferUsageFlagBits::eVertexBuffer,
+		model.vertices.size() * sizeof(model.vertices[0]),
+		reinterpret_cast<uint8_t*>(model.vertices.data())
+	);
+	auto indices = vulkan.createBufferWithData(
+		vk::BufferUsageFlagBits::eIndexBuffer,
+		model.indices.size() * sizeof(model.indices[0]),
+		reinterpret_cast<uint8_t*>(model.indices.data())
+	);
+	return {
+		std::move(vertices),
+		std::move(indices)
+	};
 }

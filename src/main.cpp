@@ -5,6 +5,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "terrain.hpp"
 #include "vulkan.hpp"
 #include "util.h"
 
@@ -62,6 +63,9 @@ int main(int argc, char** argv) {
 		readFile(basePath / "terrain.frag.spv"),
 		vk::PrimitiveTopology::eTriangleList
 	);
+
+	Model terrainModel = makeTerrainModel();
+	UploadedModel terrainBuffers = UploadedModel::fromModel(terrainModel, vulkan);
 
 	glfwSetKeyCallback(window, glfwKeyCallback);
 

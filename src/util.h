@@ -12,7 +12,7 @@
 	} while (0)
 
 #define assertThat(condition, msg) do {\
-		if (condition) { \
+		if (!condition) { \
 			fprintf(stderr, "%s", msg); \
 			exit(1); \
 		} \
