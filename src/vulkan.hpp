@@ -37,7 +37,7 @@ public:
 	vk::UniqueSwapchainKHR swapchain;
 	std::vector<vk::Image> swapchainImages;
 	std::vector<vk::UniqueImageView> swapchainImageViews;
-	std::vector<vk::UniqueFence> swapchainFences;
+	std::vector<vk::Fence> swapchainFences;
 	vk::UniquePipelineLayout pipelineLayout;
 	vk::UniqueRenderPass renderpass;
 	vk::UniqueImage depthImage;
@@ -74,7 +74,7 @@ public:
 	void setSurface(VkSurfaceKHR surface);
 	vk::UniquePipeline makePipeline(std::vector<uint8_t> vertexShaderCode, std::vector<uint8_t> fragmentShaderCode, vk::PrimitiveTopology topology);
 	BufferAndMemory createBufferWithData(vk::BufferUsageFlags usage, size_t size, uint8_t *data);
-	std::pair<vk::Framebuffer, PerFrame&> acquireImage();
+	std::pair<uint32_t, PerFrame&> acquireImage();
 
 private:
 	void setupFramebuffers(vk::Extent2D dimensions);

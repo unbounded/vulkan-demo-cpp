@@ -119,7 +119,7 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 		swapchainImageViews.emplace_back(
 			createImageView(image, format.format, vk::ImageAspectFlagBits::eDepth)
 		);
-		swapchainFences.emplace_back(device->createFenceUnique({}));
+		swapchainFences.push_back(nullptr);
 	}
 
 	vk::AttachmentDescription colorAttachment{};
@@ -363,13 +363,17 @@ BufferAndMemory VulkanState::createBufferWithData(vk::BufferUsageFlags usage, si
 }
 
 
-std::pair<vk::Framebuffer, PerFrame&> VulkanState::acquireImage() {
+std::pair<uint32_t, PerFrame&> VulkanState::acquireImage() {
 	PerFrame &frame = perFrame[nextFrame()];
 	// Wait if we already have maximum amount of frames in flight
 	device->waitForFences(*frame.frameFence, true, UINT64_MAX);
 	uint32_t imageIndex = device->acquireNextImageKHR(*swapchain, UINT64_MAX, *frame.acquireImageSemaphore, nullptr);
-	// TODO: also wait if returned image is in use (no guarantees on order)
-	return {*framebuffers.at(imageIndex), frame};
+	// Could get images out of order, so wait if image is already in use by another frame
+	if (swapchainFences[imageIndex]) {
+		device->waitForFences(swapchainFences[imageIndex], true, UINT64_MAX);
+	}
+	swapchainFences[imageIndex] = *frame.frameFence;
+	return {imageIndex, frame};
 }
 
 

@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
 
 	while (!glfwWindowShouldClose(window)) {
 
-		auto [framebuffer, perFrame] = vulkan.acquireImage();
+		auto [framebufferIndex, perFrame] = vulkan.acquireImage();
 
 		vk::CommandBufferBeginInfo commandBufferInfo{};
 		commandBufferInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
 
 		vk::RenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.renderPass = *vulkan.renderpass;
-		renderPassInfo.framebuffer = framebuffer;
+		renderPassInfo.framebuffer = *vulkan.framebuffers.at(framebufferIndex);
 		renderPassInfo.renderArea.offset = {{0, 0}};
 		renderPassInfo.renderArea.extent = vulkan.currentExtent;
 		renderPassInfo.clearValueCount = clearValues.size();
@@ -112,9 +112,10 @@ int main(int argc, char** argv) {
 
 		perFrame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *terrainPipeline);
 
-		//perFrame.commandBuffer.bindVertexBuffers();
-		//perFrame.commandBuffer.bindIndexBuffer();
-		//perFrame.commandBuffer.drawIndexed(n, 1, 0, 0);
+		vk::DeviceSize zeroOffset = 0;
+		//perFrame.commandBuffer.bindVertexBuffers(0, *(terrainBuffers.vertices.buffer), zeroOffset);
+		//perFrame.commandBuffer.bindIndexBuffer(*(terrainBuffers.indices.buffer), zeroOffset, vk::IndexType::eUint32);
+		//perFrame.commandBuffer.drawIndexed(terrainModel.indices.size(), 1, 0, 0, 0);
 
 		perFrame.commandBuffer.endRenderPass();
 		perFrame.commandBuffer.end();
@@ -128,7 +129,16 @@ int main(int argc, char** argv) {
 		submitInfo.pCommandBuffers = &perFrame.commandBuffer;
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &*perFrame.submitSemaphore;
-		vulkan.queue.submit(submitInfo, nullptr);
+		vulkan.device->resetFences(*perFrame.frameFence);
+		vulkan.queue.submit(submitInfo, *perFrame.frameFence);
+
+		vk::PresentInfoKHR presentInfo{};
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &*perFrame.submitSemaphore;
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &*vulkan.swapchain;
+		presentInfo.pImageIndices = &framebufferIndex;
+		vulkan.queue.presentKHR(presentInfo);
 
 		glfwPollEvents();
 	}
