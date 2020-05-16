@@ -7,10 +7,19 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>
 
+static const size_t MAX_FRAMES_IN_FLIGHT = 2;
 
 struct BufferAndMemory {
 	vk::UniqueBuffer buffer;
 	vk::UniqueDeviceMemory memory;
+};
+
+
+struct PerFrame {
+	vk::UniqueFence frameFence;
+	vk::UniqueSemaphore acquireImageSemaphore;
+	vk::UniqueSemaphore submitSemaphore;
+	vk::CommandBuffer commandBuffer;
 };
 
 
@@ -22,31 +31,42 @@ public:
 	uint32_t queueFamily;
 	vk::UniqueDevice device;
 	vk::Queue queue;
+	vk::UniqueCommandPool commandPool;
 	vk::SurfaceKHR surface;
+	vk::Extent2D currentExtent;
 	vk::UniqueSwapchainKHR swapchain;
 	std::vector<vk::Image> swapchainImages;
 	std::vector<vk::UniqueImageView> swapchainImageViews;
+	std::vector<vk::UniqueFence> swapchainFences;
 	vk::UniquePipelineLayout pipelineLayout;
 	vk::UniqueRenderPass renderpass;
 	vk::UniqueImage depthImage;
 	vk::UniqueDeviceMemory depthImageMemory;
 	vk::UniqueImageView depthImageView;
 	std::vector<vk::UniqueFramebuffer> framebuffers;
+	std::array<PerFrame, MAX_FRAMES_IN_FLIGHT> perFrame;
+	size_t currentFrame;
 
 	VulkanState() :
-		instance(nullptr),
+		instance(),
 		physicalDevice(),
 		queueFamily(),
 		device(),
+		queue(),
+		commandPool(),
 		surface(),
+		currentExtent(),
 		swapchainImages(),
 		swapchainImageViews(),
+		swapchainFences(),
 		pipelineLayout(),
 		renderpass(),
 		depthImage(),
 		depthImageMemory(),
 		depthImageView(),
-		framebuffers()
+		framebuffers(),
+		perFrame(),
+		currentFrame(MAX_FRAMES_IN_FLIGHT - 1)
 		{};
 	~VulkanState();
 
@@ -54,12 +74,14 @@ public:
 	void setSurface(VkSurfaceKHR surface);
 	vk::UniquePipeline makePipeline(std::vector<uint8_t> vertexShaderCode, std::vector<uint8_t> fragmentShaderCode, vk::PrimitiveTopology topology);
 	BufferAndMemory createBufferWithData(vk::BufferUsageFlags usage, size_t size, uint8_t *data);
+	std::pair<vk::Framebuffer, PerFrame&> acquireImage();
 
 private:
 	void setupFramebuffers(vk::Extent2D dimensions);
 	vk::UniqueImageView createImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspects);
 	uint32_t findMemoryType(uint32_t mask, vk::MemoryPropertyFlags requiredProperties);
 	vk::UniqueShaderModule makeShaderModule(std::vector<uint8_t> &code);
+	size_t nextFrame();
 };
 
 

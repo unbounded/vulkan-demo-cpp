@@ -65,6 +65,21 @@ void VulkanState::init() {
 	deviceInfo.ppEnabledExtensionNames = requiredExtensions.data();
 	device = physicalDevice.createDeviceUnique(deviceInfo);
 	queue = device->getQueue(queueFamily, 0);
+
+	vk::CommandPoolCreateInfo poolInfo{};
+	poolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient;
+	poolInfo.queueFamilyIndex = queueFamily;
+	commandPool = device->createCommandPoolUnique(poolInfo);
+
+	vk::CommandBufferAllocateInfo perFrameCommandBufferInfo{};
+	perFrameCommandBufferInfo.commandPool = *commandPool;
+	perFrameCommandBufferInfo.commandBufferCount = 1;
+	for (PerFrame &pf: perFrame) {
+		pf.frameFence = device->createFenceUnique({vk::FenceCreateFlagBits::eSignaled});
+		pf.acquireImageSemaphore = device->createSemaphoreUnique({});
+		pf.submitSemaphore = device->createSemaphoreUnique({});
+		pf.commandBuffer = device->allocateCommandBuffers(perFrameCommandBufferInfo).at(0);
+	}
 }
 
 
@@ -72,10 +87,10 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	this->surface = surface;
 	auto capabilities = physicalDevice.getSurfaceCapabilitiesKHR(this->surface);
 	auto formats = physicalDevice.getSurfaceFormatsKHR(this->surface);
-	vk::Extent2D dimensions = capabilities.currentExtent;
-	if (dimensions.width == UINT32_MAX) {
+	currentExtent = capabilities.currentExtent;
+	if (currentExtent.width == UINT32_MAX) {
 		// TODO: should respect min/max extents
-		dimensions = vk::Extent2D{600, 600};
+		currentExtent = vk::Extent2D{600, 600};
 	}
 
 	vk::SurfaceFormatKHR format = pickFormat(
@@ -88,7 +103,7 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	swapchainInfo.minImageCount = capabilities.minImageCount;
 	swapchainInfo.imageFormat = format.format;
 	swapchainInfo.imageColorSpace = format.colorSpace;
-	swapchainInfo.imageExtent = dimensions;
+	swapchainInfo.imageExtent = currentExtent;
 	swapchainInfo.imageArrayLayers = 1;
 	swapchainInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
 	swapchainInfo.presentMode = vk::PresentModeKHR::eFifo;
@@ -104,6 +119,7 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 		swapchainImageViews.emplace_back(
 			createImageView(image, format.format, vk::ImageAspectFlagBits::eDepth)
 		);
+		swapchainFences.emplace_back(device->createFenceUnique({}));
 	}
 
 	vk::AttachmentDescription colorAttachment{};
@@ -137,6 +153,8 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	renderpassInfo.pSubpasses = &subpass;
 	// TODO: do we need dependencies?
 	renderpass = device->createRenderPassUnique(renderpassInfo);
+
+	setupFramebuffers(currentExtent);
 }
 
 // Set up frame buffers from swap chain - need to do this on init and on resize
@@ -345,12 +363,27 @@ BufferAndMemory VulkanState::createBufferWithData(vk::BufferUsageFlags usage, si
 }
 
 
+std::pair<vk::Framebuffer, PerFrame&> VulkanState::acquireImage() {
+	PerFrame &frame = perFrame[nextFrame()];
+	// Wait if we already have maximum amount of frames in flight
+	device->waitForFences(*frame.frameFence, true, UINT64_MAX);
+	uint32_t imageIndex = device->acquireNextImageKHR(*swapchain, UINT64_MAX, *frame.acquireImageSemaphore, nullptr);
+	// TODO: also wait if returned image is in use (no guarantees on order)
+	return {*framebuffers.at(imageIndex), frame};
+}
+
+
+size_t VulkanState::nextFrame() {
+	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+	return currentFrame;
+}
+
+
 VulkanState::~VulkanState() {
 	if (surface) {
 		vkDestroySurfaceKHR(*instance, surface, nullptr);
 	}
 }
-
 
 
 UploadedModel UploadedModel::fromModel(Model &model, VulkanState &vulkan) {

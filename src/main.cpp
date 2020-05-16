@@ -4,6 +4,10 @@
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+// not necessary since glm 0.9.6 but include for compatibility
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "terrain.hpp"
 #include "vulkan.hpp"
@@ -49,6 +53,7 @@ int main(int argc, char** argv) {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	GLFWwindow *window = glfwCreateWindow(600, 600, "Window Title", NULL, NULL);
 	assertNotNull(window, "Failed to create window\n");
+	glfwSetKeyCallback(window, glfwKeyCallback);
 
 	VkSurfaceKHR surface;
 	assertVkSuccess(glfwCreateWindowSurface(*vulkan.instance, window, NULL, &surface));
@@ -67,12 +72,70 @@ int main(int argc, char** argv) {
 	Model terrainModel = makeTerrainModel();
 	UploadedModel terrainBuffers = UploadedModel::fromModel(terrainModel, vulkan);
 
-	glfwSetKeyCallback(window, glfwKeyCallback);
+	// TODO: should use a real projection, this is a bit of a hack...
+	glm::mat4 projection{};
+	// Point y axis up
+	projection[1][1] = -1.0;
+	// Shorten depth to fit
+	projection[2][2] = 0.1;
+	// move back a bit
+	projection[3][2] = 1.0;
+
+	// TODO: find nicer way to do this
+	std::array<vk::ClearValue, 2> clearValues{};
+	clearValues[0].color.float32[0] = 1.0;
+	clearValues[0].color.float32[1] = 0.0;
+	clearValues[0].color.float32[2] = 0.0;
+	clearValues[0].color.float32[3] = 0.0;
+	clearValues[1].depthStencil.depth = 1.0;
+	clearValues[1].depthStencil.stencil = 0;
+
+	double startTime = glfwGetTime();
+
 
 	while (!glfwWindowShouldClose(window)) {
 
+		auto [framebuffer, perFrame] = vulkan.acquireImage();
+
+		vk::CommandBufferBeginInfo commandBufferInfo{};
+		commandBufferInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+		perFrame.commandBuffer.begin(commandBufferInfo);
+
+		vk::RenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.renderPass = *vulkan.renderpass;
+		renderPassInfo.framebuffer = framebuffer;
+		renderPassInfo.renderArea.offset = {{0, 0}};
+		renderPassInfo.renderArea.extent = vulkan.currentExtent;
+		renderPassInfo.clearValueCount = clearValues.size();
+		renderPassInfo.pClearValues = clearValues.data();
+		perFrame.commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+
+		perFrame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *terrainPipeline);
+
+		//perFrame.commandBuffer.bindVertexBuffers();
+		//perFrame.commandBuffer.bindIndexBuffer();
+		//perFrame.commandBuffer.drawIndexed(n, 1, 0, 0);
+
+		perFrame.commandBuffer.endRenderPass();
+		perFrame.commandBuffer.end();
+
+		vk::SubmitInfo submitInfo{};
+		submitInfo.waitSemaphoreCount = 1;
+		vk::PipelineStageFlags stageFlags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+		submitInfo.pWaitSemaphores = &*perFrame.acquireImageSemaphore;
+		submitInfo.pWaitDstStageMask = &stageFlags;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &perFrame.commandBuffer;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &*perFrame.submitSemaphore;
+		vulkan.queue.submit(submitInfo, nullptr);
+
 		glfwPollEvents();
 	}
+
+	vulkan.device->waitIdle();
+	// TODO: recheck if we need to do this
+	//vulkan.instance->destroySurfaceKHR(surface);
 
 	glfwDestroyWindow(window);
 
