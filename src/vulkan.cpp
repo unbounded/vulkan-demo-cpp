@@ -269,13 +269,13 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	vk::PipelineInputAssemblyStateCreateInfo inputInfo{};
 	inputInfo.topology = topology;
 
-	// FIXME use dynamic
-	vk::Viewport viewport{
+	viewport = vk::Viewport(
 		0, 0,
-		600, 600,
+		currentExtent.width, currentExtent.height,
 		0.0, 1.0
-	};
-	vk::Rect2D scissor{{0, 0}, {600, 600}};
+	);
+	scissor.offset = vk::Offset2D(0, 0);
+	scissor.extent = currentExtent;
 	vk::PipelineViewportStateCreateInfo viewportInfo{{}, 1, &viewport, 1, &scissor};
 
 	vk::PipelineRasterizationStateCreateInfo rasterizationInfo{};
@@ -302,8 +302,9 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	colorBlendInfo.attachmentCount = 1;
 	colorBlendInfo.pAttachments = &blendAttachment;
 
-	std::array<vk::DynamicState, 1> dynamicStates {
+	std::array<vk::DynamicState, 2> dynamicStates {
 		vk::DynamicState::eViewport,
+		vk::DynamicState::eScissor,
 	};
 	vk::PipelineDynamicStateCreateInfo dynamicStateInfo{};
 	dynamicStateInfo.dynamicStateCount = dynamicStates.size();

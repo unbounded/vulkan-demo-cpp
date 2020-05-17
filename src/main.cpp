@@ -120,6 +120,9 @@ int main(int argc, char** argv) {
 
 		perFrame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *terrainPipeline);
 
+		perFrame.commandBuffer.setViewport(0, vulkan.viewport);
+		perFrame.commandBuffer.setScissor(0, vulkan.scissor);
+
 		perFrame.commandBuffer.pushConstants(
 			*vulkan.pipelineLayout,
 			vk::ShaderStageFlagBits::eVertex,

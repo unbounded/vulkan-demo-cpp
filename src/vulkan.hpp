@@ -38,6 +38,8 @@ public:
 	std::vector<vk::Image> swapchainImages;
 	std::vector<vk::UniqueImageView> swapchainImageViews;
 	std::vector<vk::Fence> swapchainFences;
+	vk::Viewport viewport;
+	vk::Rect2D scissor;
 	vk::UniquePipelineLayout pipelineLayout;
 	vk::UniqueRenderPass renderpass;
 	vk::UniqueImage depthImage;
@@ -59,6 +61,8 @@ public:
 		swapchainImages(),
 		swapchainImageViews(),
 		swapchainFences(),
+		viewport(),
+		scissor(),
 		pipelineLayout(),
 		renderpass(),
 		depthImage(),
