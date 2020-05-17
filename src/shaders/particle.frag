@@ -12,6 +12,6 @@ void main() {
 	if (distance(gl_PointCoord, vec2(.5, .5)) < .5) {
 		f_color = vec4(236, 112, 34, 1.0) / 255;
 	} else {
-		f_color = vec4(0.0, 0.0, 0.0, 0.0);
+		discard;
 	}
 }
