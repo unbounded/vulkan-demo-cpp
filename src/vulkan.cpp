@@ -146,12 +146,18 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentRef;
 	subpass.pDepthStencilAttachment = &depthAttachmentRef;
+	vk::SubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+	dependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+	dependency.srcAccessMask = {};
+	dependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
 	vk::RenderPassCreateInfo renderpassInfo{};
 	renderpassInfo.attachmentCount = attachments.size();
 	renderpassInfo.pAttachments = attachments.data();
 	renderpassInfo.subpassCount = 1;
 	renderpassInfo.pSubpasses = &subpass;
-	// TODO: do we need dependencies?
 	renderpass = device->createRenderPassUnique(renderpassInfo);
 
 	setupFramebuffers(currentExtent);
@@ -303,7 +309,13 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	dynamicStateInfo.dynamicStateCount = dynamicStates.size();
 	dynamicStateInfo.pDynamicStates = dynamicStates.data();
 
+	vk::PushConstantRange pushConstantRange{};
+	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(glm::mat4);
 	vk::PipelineLayoutCreateInfo layoutInfo{};
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &pushConstantRange;
 
 	pipelineLayout = device->createPipelineLayoutUnique(layoutInfo);
 

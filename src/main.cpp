@@ -97,6 +97,14 @@ int main(int argc, char** argv) {
 
 		auto [framebufferIndex, perFrame] = vulkan.acquireImage();
 
+		double time = glfwGetTime() - startTime;
+		glm::mat4 view = glm::lookAt(
+			glm::vec3(2 * cos(time), -2.0, 2 * sin(time)),
+			glm::vec3(0.0, 0.2, 0.0),
+			glm::vec3(0.0, 1.0, 0.0)
+		);
+		glm::mat4 mvp = projection * view;
+
 		vk::CommandBufferBeginInfo commandBufferInfo{};
 		commandBufferInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
 		perFrame.commandBuffer.begin(commandBufferInfo);
@@ -111,6 +119,15 @@ int main(int argc, char** argv) {
 		perFrame.commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
 		perFrame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *terrainPipeline);
+
+		perFrame.commandBuffer.pushConstants(
+			*vulkan.pipelineLayout,
+			vk::ShaderStageFlagBits::eVertex,
+			0,
+			sizeof(mvp),
+			&mvp
+		);
+		// TODO: dynamic
 
 		vk::DeviceSize zeroOffset = 0;
 		//perFrame.commandBuffer.bindVertexBuffers(0, *(terrainBuffers.vertices.buffer), zeroOffset);
