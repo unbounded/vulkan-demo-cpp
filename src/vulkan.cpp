@@ -1,5 +1,7 @@
 // Helper code and boilerplate for Vulkan setup
 
+#include <algorithm>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <array>
@@ -91,8 +93,8 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	auto formats = physicalDevice.getSurfaceFormatsKHR(this->surface);
 	currentExtent = capabilities.currentExtent;
 	if (currentExtent.width == UINT32_MAX) {
-		// TODO: should respect min/max extents
-		currentExtent = vk::Extent2D{600, 600};
+		currentExtent.width = std::min(std::max((uint32_t) 800, capabilities.minImageExtent.width), capabilities.maxImageExtent.width);
+		currentExtent.height = std::min(std::max((uint32_t) 600, capabilities.minImageExtent.height), capabilities.maxImageExtent.height);
 	}
 
 	vk::SurfaceFormatKHR format = pickFormat(
@@ -110,7 +112,6 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	swapchainInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
 	swapchainInfo.presentMode = vk::PresentModeKHR::eFifo;
 	swapchainInfo.clipped = true;
-	// TODO: probably only need color buffer
 	swapchainInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
 	swapchainInfo.queueFamilyIndexCount = 0;
 	swapchainInfo.pQueueFamilyIndices = nullptr;
@@ -167,8 +168,6 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 
 // Set up frame buffers from swap chain - need to do this on init and on resize
 void VulkanState::setupFramebuffers(vk::Extent2D dimensions) {
-	// TODO: set dynamic state
-
 	vk::ImageCreateInfo imageInfo{};
 	imageInfo.imageType = vk::ImageType::e2D;
 	imageInfo.format = vk::Format::eD32Sfloat;
@@ -281,8 +280,7 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	vk::PipelineViewportStateCreateInfo viewportInfo{{}, 1, &viewport, 1, &scissor};
 
 	vk::PipelineRasterizationStateCreateInfo rasterizationInfo{};
-	// TODO: backface culling
-	rasterizationInfo.cullMode = vk::CullModeFlagBits::eNone;
+	rasterizationInfo.cullMode = vk::CullModeFlagBits::eBack;
 	rasterizationInfo.lineWidth = 1.0;
 
 	vk::PipelineMultisampleStateCreateInfo multisampleInfo{};
