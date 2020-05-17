@@ -130,12 +130,11 @@ int main(int argc, char** argv) {
 			sizeof(mvp),
 			&mvp
 		);
-		// TODO: dynamic
 
 		vk::DeviceSize zeroOffset = 0;
-		//perFrame.commandBuffer.bindVertexBuffers(0, *(terrainBuffers.vertices.buffer), zeroOffset);
-		//perFrame.commandBuffer.bindIndexBuffer(*(terrainBuffers.indices.buffer), zeroOffset, vk::IndexType::eUint32);
-		//perFrame.commandBuffer.drawIndexed(terrainModel.indices.size(), 1, 0, 0, 0);
+		perFrame.commandBuffer.bindVertexBuffers(0, *(terrainBuffers.vertices.buffer), zeroOffset);
+		perFrame.commandBuffer.bindIndexBuffer(*(terrainBuffers.indices.buffer), zeroOffset, vk::IndexType::eUint32);
+		perFrame.commandBuffer.drawIndexed(terrainModel.indices.size(), 1, 0, 0, 0);
 
 		perFrame.commandBuffer.endRenderPass();
 		perFrame.commandBuffer.end();
