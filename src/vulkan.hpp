@@ -26,52 +26,29 @@ struct PerFrame {
 class VulkanState
 {
 public:
-	vk::UniqueInstance instance;
-	vk::PhysicalDevice physicalDevice;
-	uint32_t queueFamily;
-	vk::UniqueDevice device;
-	vk::Queue queue;
-	vk::UniqueCommandPool commandPool;
-	vk::SurfaceKHR surface;
-	vk::Extent2D currentExtent;
-	vk::UniqueSwapchainKHR swapchain;
-	std::vector<vk::Image> swapchainImages;
-	std::vector<vk::UniqueImageView> swapchainImageViews;
-	std::vector<vk::Fence> swapchainFences;
-	vk::Viewport viewport;
-	vk::Rect2D scissor;
-	vk::UniquePipelineLayout pipelineLayout;
-	vk::UniqueRenderPass renderpass;
-	vk::UniqueImage depthImage;
-	vk::UniqueDeviceMemory depthImageMemory;
-	vk::UniqueImageView depthImageView;
-	std::vector<vk::UniqueFramebuffer> framebuffers;
-	std::array<PerFrame, MAX_FRAMES_IN_FLIGHT> perFrame;
-	size_t currentFrame;
+	vk::UniqueInstance instance{};
+	vk::PhysicalDevice physicalDevice{};
+	uint32_t queueFamily{};
+	vk::UniqueDevice device{};
+	vk::Queue queue{};
+	vk::UniqueCommandPool commandPool{};
+	vk::SurfaceKHR surface{};
+	vk::Extent2D currentExtent{};
+	vk::UniqueSwapchainKHR swapchain{};
+	std::vector<vk::Image> swapchainImages{};
+	std::vector<vk::UniqueImageView> swapchainImageViews{};
+	std::vector<vk::Fence> swapchainFences{};
+	vk::Viewport viewport{};
+	vk::Rect2D scissor{};
+	vk::UniquePipelineLayout pipelineLayout{};
+	vk::UniqueRenderPass renderpass{};
+	vk::UniqueImage depthImage{};
+	vk::UniqueDeviceMemory depthImageMemory{};
+	vk::UniqueImageView depthImageView{};
+	std::vector<vk::UniqueFramebuffer> framebuffers{};
+	std::array<PerFrame, MAX_FRAMES_IN_FLIGHT> perFrame{};
+	size_t currentFrame{MAX_FRAMES_IN_FLIGHT - 1};
 
-	VulkanState() :
-		instance(),
-		physicalDevice(),
-		queueFamily(),
-		device(),
-		queue(),
-		commandPool(),
-		surface(),
-		currentExtent(),
-		swapchainImages(),
-		swapchainImageViews(),
-		swapchainFences(),
-		viewport(),
-		scissor(),
-		pipelineLayout(),
-		renderpass(),
-		depthImage(),
-		depthImageMemory(),
-		depthImageView(),
-		framebuffers(),
-		perFrame(),
-		currentFrame(MAX_FRAMES_IN_FLIGHT - 1)
-		{};
 	~VulkanState();
 
 	void init();
