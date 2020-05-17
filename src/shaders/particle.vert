@@ -11,12 +11,14 @@ layout(push_constant) uniform State {
 const float gravity = 1.0;
 
 void main() {
+	// Particle position is calculated based on time and initial position and speed
 	vec3 pos = pos0 + v0 * state.time;
 	pos.y -= gravity * state.time * state.time;
 	if (pos.y >= 0) {
 		gl_Position = state.mvp * vec4(pos, 1.0);
 		gl_PointSize = 10;
 	} else {
+		// Hide particle after it hit the ground
 		gl_Position = vec4(-100, -100, -100, 1.0);
 		gl_PointSize = 0;
 	}

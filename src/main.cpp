@@ -1,4 +1,3 @@
-
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -10,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "model.hpp"
 #include "particles.hpp"
 #include "terrain.hpp"
 #include "util.h"
@@ -142,10 +142,12 @@ int main(int argc, char** argv) {
 
 		auto maybeImage = vulkan.acquireImage();
 		if (!maybeImage.has_value()) {
+			// If the swap chain needs recreating we wait until the next frame
 			continue;
 		}
 		auto [framebufferIndex, perFrame] = *maybeImage;
 
+		// Simple view rotating by time
 		double time = glfwGetTime() - startTime;
 		glm::mat4 view = glm::lookAt(
 			glm::vec3(2 * cos(time), -2.0, 2 * sin(time)),
@@ -187,7 +189,7 @@ int main(int argc, char** argv) {
 
 		perFrame.commandBuffer.bindVertexBuffers(0, *(terrainBuffers.vertices.buffer), zeroOffset);
 		perFrame.commandBuffer.bindIndexBuffer(*(terrainBuffers.indices.buffer), zeroOffset, vk::IndexType::eUint32);
-		perFrame.commandBuffer.drawIndexed(terrainModel.indices.size(), 1, 0, 0, 0);
+		perFrame.commandBuffer.drawIndexed(terrainBuffers.numIncides, 1, 0, 0, 0);
 
 		// Draw particles
 
@@ -230,6 +232,7 @@ int main(int argc, char** argv) {
 		try {
 			vulkan.queue.presentKHR(presentInfo);
 		} catch (vk::OutOfDateKHRError &e) {
+			// If surface is resized we need to recreate the swap chain
 			vulkan.requestRecreateSwapchain();
 			continue;
 		}
@@ -239,8 +242,8 @@ int main(int argc, char** argv) {
 
 	vulkan.device->waitIdle();
 
-	terrainPipeline.pipeline.reset();
-	terrainPipeline.layout.reset();
+	particlePipeline.reset();
+	terrainPipeline.reset();
 	vulkan.unsetSurface();
 	vulkan.instance->destroySurfaceKHR(surface);
 

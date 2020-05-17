@@ -8,9 +8,10 @@ glm = dependency('glm')
 
 sources = [
 	'src/main.cpp',
-	'src/vulkan.cpp',
-	'src/terrain.cpp',
+	'src/model.cpp',
 	'src/particles.cpp',
+	'src/terrain.cpp',
+	'src/vulkan.cpp',
 ]
 
 executable('vulkan-demo', sources, dependencies: [glfw, vulkan, glm])

@@ -1,3 +1,4 @@
-#include "vulkan.hpp"
+#include "model.hpp"
 
+// Make terrain model
 Model makeTerrainModel();

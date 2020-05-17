@@ -7,12 +7,12 @@
 #include <glm/glm.hpp>
 
 #include "terrain.hpp"
-#include "vulkan.hpp"
 
 // Dimensions of height map
 const size_t MAP_SIZE = 32;
 
 
+// Make a MAP_SIZE x MAP_SIZE height map with elevation between 0 and 1
 static std::vector<float> generateHeightmap() {
 	std::vector<float> map{};
 	map.reserve(MAP_SIZE*MAP_SIZE);
@@ -29,6 +29,7 @@ static std::vector<float> generateHeightmap() {
 }
 
 
+// Convert the height map to vertices with a calculated normal
 static std::vector<Vertex> makeVertices(std::vector<float> &heights) {
 	std::vector<Vertex> vertices{};
 	// This is silly, should probably just store heights in proper structure
@@ -89,6 +90,7 @@ static std::vector<uint32_t> makeIndices() {
 }
 
 
+// Make terrain model
 Model makeTerrainModel() {
 	auto heights = generateHeightmap();
 	auto vertices = makeVertices(heights);
