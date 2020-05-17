@@ -59,6 +59,7 @@ void VulkanState::init() {
 	};
 
 	vk::DeviceCreateInfo deviceInfo{};
+	deviceInfo.queueCreateInfoCount = 1;
 	deviceInfo.pQueueCreateInfos = &queueInfo;
 	deviceInfo.pEnabledFeatures = &enabledFeatures;
 	deviceInfo.enabledExtensionCount = requiredExtensions.size();
@@ -84,6 +85,7 @@ void VulkanState::init() {
 
 
 void VulkanState::setSurface(VkSurfaceKHR surface) {
+	assertThat(physicalDevice.getSurfaceSupportKHR(queueFamily, surface), "Surface not supported by selected device\n");
 	this->surface = surface;
 	auto capabilities = physicalDevice.getSurfaceCapabilitiesKHR(this->surface);
 	auto formats = physicalDevice.getSurfaceFormatsKHR(this->surface);
@@ -109,15 +111,15 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	swapchainInfo.presentMode = vk::PresentModeKHR::eFifo;
 	swapchainInfo.clipped = true;
 	// TODO: probably only need color buffer
-	swapchainInfo.imageUsage = capabilities.supportedUsageFlags;
-	swapchainInfo.queueFamilyIndexCount = 1;
-	swapchainInfo.pQueueFamilyIndices = &queueFamily;
+	swapchainInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
+	swapchainInfo.queueFamilyIndexCount = 0;
+	swapchainInfo.pQueueFamilyIndices = nullptr;
 	swapchain = device->createSwapchainKHRUnique(swapchainInfo);
 	swapchainImages = device->getSwapchainImagesKHR(*swapchain);
 
 	for (auto &image: swapchainImages) {
 		swapchainImageViews.emplace_back(
-			createImageView(image, format.format, vk::ImageAspectFlagBits::eDepth)
+			createImageView(image, format.format, vk::ImageAspectFlagBits::eColor)
 		);
 		swapchainFences.push_back(nullptr);
 	}
@@ -256,8 +258,8 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	vertexBinding.inputRate = vk::VertexInputRate::eVertex;
 	std::vector<vk::VertexInputAttributeDescription> vertexAttributes{
 		{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)},
-		{0, 1, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal)},
-		{0, 2, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord)},
+		{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal)},
+		{2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord)},
 	};
 
 	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
@@ -333,6 +335,7 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	pipelineInfo.pDynamicState = &dynamicStateInfo;
 	pipelineInfo.layout = *pipelineLayout;
 	pipelineInfo.renderPass = *renderpass;
+	pipelineInfo.basePipelineIndex = -1;
 
 	return device->createGraphicsPipelineUnique(nullptr, pipelineInfo);
 }
