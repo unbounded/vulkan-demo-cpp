@@ -1,6 +1,8 @@
 glslc = find_program('glslc')
 
 shaders = [
+	'particle.vert',
+	'particle.frag',
 	'terrain.vert',
 	'terrain.frag',
 ]

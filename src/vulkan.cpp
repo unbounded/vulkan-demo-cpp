@@ -283,7 +283,7 @@ uint32_t VulkanState::findMemoryType(uint32_t mask, vk::MemoryPropertyFlags requ
 			return i;
 		}
 	}
-	assertThat(false, "Could not find usable memory type");
+	assertThat(false, "Could not find usable memory type\n");
 }
 
 
@@ -300,7 +300,13 @@ vk::UniqueImageView VulkanState::createImageView(vk::Image image, vk::Format for
 	return device->createImageViewUnique(imageViewInfo);
 }
 
-vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCode, std::vector<uint8_t> fragmentShaderCode, vk::PrimitiveTopology topology) {
+Pipeline VulkanState::makePipeline(
+	std::vector<uint8_t> vertexShaderCode,
+	std::vector<uint8_t> fragmentShaderCode,
+	vk::PipelineVertexInputStateCreateInfo vertexInputInfo,
+	vk::PrimitiveTopology topology,
+	size_t pushConstantSize
+) {
 	assertThat(renderpass, "Surface must be set before making pipeline\n");
 	auto vertexModule = makeShaderModule(vertexShaderCode);
 	auto fragmentModule = makeShaderModule(fragmentShaderCode);
@@ -315,29 +321,13 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	fragmentStage.pName = "main";
 	std::array<vk::PipelineShaderStageCreateInfo, 2> shaderStages { vertexStage, fragmentStage };
 
-	vk::VertexInputBindingDescription vertexBinding{};
-	vertexBinding.binding = 0;
-	vertexBinding.stride = sizeof(Vertex);
-	vertexBinding.inputRate = vk::VertexInputRate::eVertex;
-	std::vector<vk::VertexInputAttributeDescription> vertexAttributes{
-		{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)},
-		{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal)},
-		{2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord)},
-	};
-
-	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &vertexBinding;
-	vertexInputInfo.vertexAttributeDescriptionCount = vertexAttributes.size();
-	vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes.data();
-
 	vk::PipelineInputAssemblyStateCreateInfo inputInfo{};
 	inputInfo.topology = topology;
 
 	vk::PipelineViewportStateCreateInfo viewportInfo{{}, 1, &viewport, 1, &scissor};
 
 	vk::PipelineRasterizationStateCreateInfo rasterizationInfo{};
-	rasterizationInfo.cullMode = vk::CullModeFlagBits::eBack;
+	rasterizationInfo.cullMode = vk::CullModeFlagBits::eNone;
 	rasterizationInfo.lineWidth = 1.0;
 
 	vk::PipelineMultisampleStateCreateInfo multisampleInfo{};
@@ -370,12 +360,12 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	vk::PushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(glm::mat4);
+	pushConstantRange.size = pushConstantSize;
 	vk::PipelineLayoutCreateInfo layoutInfo{};
 	layoutInfo.pushConstantRangeCount = 1;
 	layoutInfo.pPushConstantRanges = &pushConstantRange;
 
-	pipelineLayout = device->createPipelineLayoutUnique(layoutInfo);
+	vk::UniquePipelineLayout pipelineLayout = device->createPipelineLayoutUnique(layoutInfo);
 
 	vk::GraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.stageCount = shaderStages.size();
@@ -392,7 +382,11 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	pipelineInfo.renderPass = *renderpass;
 	pipelineInfo.basePipelineIndex = -1;
 
-	return device->createGraphicsPipelineUnique(nullptr, pipelineInfo);
+	vk::UniquePipeline pipeline = device->createGraphicsPipelineUnique(nullptr, pipelineInfo);
+	return {
+		std::move(pipelineLayout),
+		std::move(pipeline)
+	};
 }
 
 vk::UniqueShaderModule VulkanState::makeShaderModule(std::vector<uint8_t> &code) {

@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 
@@ -9,9 +10,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "particles.hpp"
 #include "terrain.hpp"
-#include "vulkan.hpp"
 #include "util.h"
+#include "vulkan.hpp"
 
 namespace fs = std::filesystem;
 
@@ -62,15 +64,58 @@ int main(int argc, char** argv) {
 
 	fs::path basePath{argv[0]};
 	basePath = basePath.parent_path();
+
+	vk::VertexInputBindingDescription vertexBinding{};
+	vertexBinding.binding = 0;
+	vertexBinding.stride = sizeof(Vertex);
+	vertexBinding.inputRate = vk::VertexInputRate::eVertex;
+	std::vector<vk::VertexInputAttributeDescription> vertexAttributes{
+		{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)},
+		{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal)},
+		{2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord)},
+	};
+
+	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &vertexBinding;
+	vertexInputInfo.vertexAttributeDescriptionCount = vertexAttributes.size();
+	vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes.data();
 	
 	auto terrainPipeline = vulkan.makePipeline(
 		readFile(basePath / "terrain.vert.spv"),
 		readFile(basePath / "terrain.frag.spv"),
-		vk::PrimitiveTopology::eTriangleList
+		vertexInputInfo,
+		vk::PrimitiveTopology::eTriangleList,
+		sizeof(glm::mat4)
+	);
+
+	vk::VertexInputBindingDescription particleVertexBinding{};
+	particleVertexBinding.binding = 0;
+	particleVertexBinding.stride = sizeof(Particle);
+	particleVertexBinding.inputRate = vk::VertexInputRate::eVertex;
+	std::vector<vk::VertexInputAttributeDescription> particleVertexAttributes{
+		{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Particle, pos0)},
+		{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Particle, v0)},
+	};
+
+	vk::PipelineVertexInputStateCreateInfo particleVertexInputInfo{};
+	particleVertexInputInfo.vertexBindingDescriptionCount = 1;
+	particleVertexInputInfo.pVertexBindingDescriptions = &particleVertexBinding;
+	particleVertexInputInfo.vertexAttributeDescriptionCount = particleVertexAttributes.size();
+	particleVertexInputInfo.pVertexAttributeDescriptions = particleVertexAttributes.data();
+
+	auto particlePipeline = vulkan.makePipeline(
+		readFile(basePath / "particle.vert.spv"),
+		readFile(basePath / "particle.frag.spv"),
+		particleVertexInputInfo,
+		vk::PrimitiveTopology::ePointList,
+		sizeof(std::pair<glm::mat4, float>)
 	);
 
 	Model terrainModel = makeTerrainModel();
 	UploadedModel terrainBuffers = UploadedModel::fromModel(terrainModel, vulkan);
+
+	auto [particles, particleCount] = makeParticles(vulkan);
 
 	// TODO: should use a real projection, this is a bit of a hack...
 	glm::mat4 projection{1};
@@ -108,6 +153,9 @@ int main(int argc, char** argv) {
 			glm::vec3(0.0, 1.0, 0.0)
 		);
 		glm::mat4 mvp = projection * view;
+		auto particleState = std::make_pair(mvp, (float) fmod(time, 3.0));
+
+		vk::DeviceSize zeroOffset = 0;
 
 		vk::CommandBufferBeginInfo commandBufferInfo{};
 		commandBufferInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
@@ -122,23 +170,41 @@ int main(int argc, char** argv) {
 		renderPassInfo.pClearValues = clearValues.data();
 		perFrame.commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
-		perFrame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *terrainPipeline);
+		// Draw terrain
+
+		perFrame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *terrainPipeline.pipeline);
 
 		perFrame.commandBuffer.setViewport(0, vulkan.viewport);
 		perFrame.commandBuffer.setScissor(0, vulkan.scissor);
 
 		perFrame.commandBuffer.pushConstants(
-			*vulkan.pipelineLayout,
+			*terrainPipeline.layout,
 			vk::ShaderStageFlagBits::eVertex,
 			0,
 			sizeof(mvp),
 			&mvp
 		);
 
-		vk::DeviceSize zeroOffset = 0;
 		perFrame.commandBuffer.bindVertexBuffers(0, *(terrainBuffers.vertices.buffer), zeroOffset);
 		perFrame.commandBuffer.bindIndexBuffer(*(terrainBuffers.indices.buffer), zeroOffset, vk::IndexType::eUint32);
 		perFrame.commandBuffer.drawIndexed(terrainModel.indices.size(), 1, 0, 0, 0);
+
+		// Draw particles
+
+		perFrame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *particlePipeline.pipeline);
+
+		perFrame.commandBuffer.setViewport(0, vulkan.viewport);
+		perFrame.commandBuffer.setScissor(0, vulkan.scissor);
+
+		perFrame.commandBuffer.pushConstants(
+			*particlePipeline.layout,
+			vk::ShaderStageFlagBits::eVertex,
+			0,
+			sizeof(particleState),
+			&particleState
+		);
+		perFrame.commandBuffer.bindVertexBuffers(0, *(particles.buffer), zeroOffset);
+		perFrame.commandBuffer.draw(particleCount, 1, 0, 0);
 
 		perFrame.commandBuffer.endRenderPass();
 		perFrame.commandBuffer.end();
@@ -173,7 +239,8 @@ int main(int argc, char** argv) {
 
 	vulkan.device->waitIdle();
 
-	terrainPipeline.reset();
+	terrainPipeline.pipeline.reset();
+	terrainPipeline.layout.reset();
 	vulkan.unsetSurface();
 	vulkan.instance->destroySurfaceKHR(surface);
 

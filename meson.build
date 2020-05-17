@@ -10,6 +10,7 @@ sources = [
 	'src/main.cpp',
 	'src/vulkan.cpp',
 	'src/terrain.cpp',
+	'src/particles.cpp',
 ]
 
 executable('vulkan-demo', sources, dependencies: [glfw, vulkan, glm])

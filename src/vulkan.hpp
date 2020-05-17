@@ -23,6 +23,12 @@ struct PerFrame {
 };
 
 
+struct Pipeline {
+	vk::UniquePipelineLayout layout;
+	vk::UniquePipeline pipeline;
+};
+
+
 class VulkanState
 {
 public:
@@ -41,7 +47,6 @@ public:
 	std::vector<vk::Fence> swapchainFences{};
 	vk::Viewport viewport{};
 	vk::Rect2D scissor{};
-	vk::UniquePipelineLayout pipelineLayout{};
 	vk::UniqueRenderPass renderpass{};
 	vk::UniqueImage depthImage{};
 	vk::UniqueDeviceMemory depthImageMemory{};
@@ -56,7 +61,13 @@ public:
 	void init();
 	void setSurface(VkSurfaceKHR surface);
 	void unsetSurface();
-	vk::UniquePipeline makePipeline(std::vector<uint8_t> vertexShaderCode, std::vector<uint8_t> fragmentShaderCode, vk::PrimitiveTopology topology);
+	Pipeline makePipeline(
+		std::vector<uint8_t> vertexShaderCode,
+		std::vector<uint8_t> fragmentShaderCode,
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo,
+		vk::PrimitiveTopology topology,
+		size_t pushConstantSize
+	);
 	BufferAndMemory createBufferWithData(vk::BufferUsageFlags usage, size_t size, uint8_t *data);
 	std::optional<std::pair<uint32_t, PerFrame&>> acquireImage();
 	void requestRecreateSwapchain();
@@ -80,6 +91,12 @@ struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 normal;
 	glm::vec2 texCoord;
+};
+
+
+struct Particle {
+	glm::vec3 pos0;
+	glm::vec3 v0;
 };
 
 
