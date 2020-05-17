@@ -211,6 +211,22 @@ void VulkanState::setupFramebuffers(vk::Extent2D dimensions) {
 }
 
 
+// Free resources created from the setSurface call
+// Should do this before we free the surface, so can't just rely on the destructor
+void VulkanState::unsetSurface() {
+	framebuffers.clear();
+	depthImageView.reset();
+	depthImageMemory.reset();
+	depthImage.reset();
+	renderpass.reset();
+	swapchainFences.clear();
+	swapchainImageViews.clear();
+	swapchainImages.clear();
+	swapchain.reset();
+	surface = nullptr;
+}
+
+
 uint32_t VulkanState::findMemoryType(uint32_t mask, vk::MemoryPropertyFlags requiredProperties) {
 	auto memoryProperties = physicalDevice.getMemoryProperties();
 	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {

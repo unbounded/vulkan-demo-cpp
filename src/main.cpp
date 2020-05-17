@@ -163,8 +163,10 @@ int main(int argc, char** argv) {
 	}
 
 	vulkan.device->waitIdle();
-	// TODO: recheck if we need to do this
-	//vulkan.instance->destroySurfaceKHR(surface);
+
+	terrainPipeline.reset();
+	vulkan.unsetSurface();
+	vulkan.instance->destroySurfaceKHR(surface);
 
 	glfwDestroyWindow(window);
 

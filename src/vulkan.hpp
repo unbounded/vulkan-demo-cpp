@@ -76,6 +76,7 @@ public:
 
 	void init();
 	void setSurface(VkSurfaceKHR surface);
+	void unsetSurface();
 	vk::UniquePipeline makePipeline(std::vector<uint8_t> vertexShaderCode, std::vector<uint8_t> fragmentShaderCode, vk::PrimitiveTopology topology);
 	BufferAndMemory createBufferWithData(vk::BufferUsageFlags usage, size_t size, uint8_t *data);
 	std::pair<uint32_t, PerFrame&> acquireImage();
