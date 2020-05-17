@@ -1,4 +1,4 @@
-project('vulkan-demo', 'cpp', default_options : ['cpp_std=c++17'])
+project('vulkan-demo', 'cpp', default_options : ['cpp_std=c++17', 'layout=flat'])
 
 subdir('src/shaders')
 
