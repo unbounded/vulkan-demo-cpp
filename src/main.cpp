@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
 	UploadedModel terrainBuffers = UploadedModel::fromModel(terrainModel, vulkan);
 
 	// TODO: should use a real projection, this is a bit of a hack...
-	glm::mat4 projection{};
+	glm::mat4 projection{1};
 	// Point y axis up
 	projection[1][1] = -1.0;
 	// Shorten depth to fit
