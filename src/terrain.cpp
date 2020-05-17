@@ -58,9 +58,11 @@ static std::vector<Vertex> makeVertices(std::vector<float> &heights) {
 				y / (float) MAP_SIZE - 0.5,
 			};
 			glm::vec3 normal{ 2.0 * dx, -4.0, 2.0 * dy };
+			glm::vec2 texCoord{ x / (float) MAP_SIZE, y / (float) MAP_SIZE};
 			vertices.push_back({
 				pos,
-				glm::normalize(normal)
+				glm::normalize(normal),
+				texCoord
 			});
 		}
 	}

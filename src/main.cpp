@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
 
 	// TODO: find nicer way to do this
 	std::array<vk::ClearValue, 2> clearValues{};
-	clearValues[0].color.float32[0] = 1.0;
+	clearValues[0].color.float32[0] = 0.0;
 	clearValues[0].color.float32[1] = 0.0;
 	clearValues[0].color.float32[2] = 0.0;
 	clearValues[0].color.float32[3] = 0.0;
