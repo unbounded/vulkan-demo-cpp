@@ -5,7 +5,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <array>
-//#include <vulkan/vulkan.h>
 
 #include "vulkan.hpp"
 #include "util.h"
@@ -89,15 +88,47 @@ void VulkanState::init() {
 void VulkanState::setSurface(VkSurfaceKHR surface) {
 	assertThat(physicalDevice.getSurfaceSupportKHR(queueFamily, surface), "Surface not supported by selected device\n");
 	this->surface = surface;
-	auto capabilities = physicalDevice.getSurfaceCapabilitiesKHR(this->surface);
-	auto formats = physicalDevice.getSurfaceFormatsKHR(this->surface);
+	createSwapchain();
+	createRenderpass();
+	setupFramebuffers();
+}
+
+
+
+void VulkanState::recreateSwapchain() {
+	device->waitIdle();
+
+	// Should techhnically recreate render pass and pipelines here too,
+	// but is a bit inconvenient with current structure.
+	// Should be OK as long as the surface format doesn't change
+	unsetFramebuffers();
+	unsetSwapchain();
+	createSwapchain();
+	setupFramebuffers();
+
+	shouldRecreateSwapchain = false;
+}
+
+
+// Free resources created from the setSurface call
+// Should do this before we free the surface, so can't just rely on the destructor
+void VulkanState::unsetSurface() {
+	unsetFramebuffers();
+	unsetRenderpass();
+	unsetSwapchain();
+	surface = nullptr;
+}
+
+void VulkanState::createSwapchain() {
+	auto capabilities = physicalDevice.getSurfaceCapabilitiesKHR(surface);
+	auto formats = physicalDevice.getSurfaceFormatsKHR(surface);
 	currentExtent = capabilities.currentExtent;
 	if (currentExtent.width == UINT32_MAX) {
 		currentExtent.width = std::min(std::max((uint32_t) 800, capabilities.minImageExtent.width), capabilities.maxImageExtent.width);
 		currentExtent.height = std::min(std::max((uint32_t) 600, capabilities.minImageExtent.height), capabilities.maxImageExtent.height);
 	}
 
-	vk::SurfaceFormatKHR format = pickFormat(
+	currentSurfaceFormat = pickFormat(
 		formats,
 		{vk::Format::eB8G8R8A8Srgb, vk::ColorSpaceKHR::eSrgbNonlinear}
 	);
@@ -105,8 +136,8 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	vk::SwapchainCreateInfoKHR swapchainInfo{};
 	swapchainInfo.surface = surface;
 	swapchainInfo.minImageCount = capabilities.minImageCount;
-	swapchainInfo.imageFormat = format.format;
-	swapchainInfo.imageColorSpace = format.colorSpace;
+	swapchainInfo.imageFormat = currentSurfaceFormat.format;
+	swapchainInfo.imageColorSpace = currentSurfaceFormat.colorSpace;
 	swapchainInfo.imageExtent = currentExtent;
 	swapchainInfo.imageArrayLayers = 1;
 	swapchainInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
@@ -120,13 +151,86 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 
 	for (auto &image: swapchainImages) {
 		swapchainImageViews.emplace_back(
-			createImageView(image, format.format, vk::ImageAspectFlagBits::eColor)
+			createImageView(image, currentSurfaceFormat.format, vk::ImageAspectFlagBits::eColor)
 		);
 		swapchainFences.push_back(nullptr);
 	}
 
+	viewport = vk::Viewport(
+		0, 0,
+		currentExtent.width, currentExtent.height,
+		0.0, 1.0
+	);
+	scissor.offset = vk::Offset2D(0, 0);
+	scissor.extent = currentExtent;
+}
+
+
+// Free resources for swap chain
+void VulkanState::unsetSwapchain() {
+	swapchainFences.clear();
+	swapchainImageViews.clear();
+	swapchainImages.clear();
+	swapchain.reset();
+}
+
+
+// Set up frame buffers from swap chain - need to do this on init and on resize
+void VulkanState::setupFramebuffers() {
+	vk::ImageCreateInfo imageInfo{};
+	imageInfo.imageType = vk::ImageType::e2D;
+	imageInfo.format = vk::Format::eD32Sfloat;
+	imageInfo.extent.width = currentExtent.width;
+	imageInfo.extent.height = currentExtent.height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransientAttachment;
+	depthImage = device->createImageUnique(imageInfo);
+
+	auto requirements = device->getImageMemoryRequirements(*depthImage);
+
+	vk::MemoryAllocateInfo allocateInfo{};
+	allocateInfo.allocationSize = requirements.size,
+	allocateInfo.memoryTypeIndex = findMemoryType(requirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+	depthImageMemory = device->allocateMemoryUnique(allocateInfo);
+
+	device->bindImageMemory(*depthImage, *depthImageMemory, 0);
+
+	depthImageView = createImageView(*depthImage, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
+
+	framebuffers.clear();
+
+	for (auto &image: swapchainImageViews) {
+		std::array<vk::ImageView, 2> attachments {
+			*image,
+			*depthImageView,
+		};
+		vk::FramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.renderPass = *renderpass;
+		framebufferInfo.attachmentCount = attachments.size();
+		framebufferInfo.pAttachments = attachments.data();
+		framebufferInfo.width = currentExtent.width;
+		framebufferInfo.height = currentExtent.height;
+		framebufferInfo.layers = 1;
+
+		framebuffers.emplace_back(device->createFramebufferUnique(framebufferInfo));
+	}
+}
+
+
+void VulkanState::unsetFramebuffers() {
+	framebuffers.clear();
+	depthImageView.reset();
+	depthImageMemory.reset();
+	depthImage.reset();
+}
+
+
+void VulkanState::createRenderpass() {
 	vk::AttachmentDescription colorAttachment{};
-	colorAttachment.format = format.format;
+	colorAttachment.format = currentSurfaceFormat.format;
 	colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
 	colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
 	colorAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
@@ -162,69 +266,13 @@ void VulkanState::setSurface(VkSurfaceKHR surface) {
 	renderpassInfo.subpassCount = 1;
 	renderpassInfo.pSubpasses = &subpass;
 	renderpass = device->createRenderPassUnique(renderpassInfo);
-
-	setupFramebuffers(currentExtent);
-}
-
-// Set up frame buffers from swap chain - need to do this on init and on resize
-void VulkanState::setupFramebuffers(vk::Extent2D dimensions) {
-	vk::ImageCreateInfo imageInfo{};
-	imageInfo.imageType = vk::ImageType::e2D;
-	imageInfo.format = vk::Format::eD32Sfloat;
-	imageInfo.extent.width = dimensions.width;
-	imageInfo.extent.height = dimensions.height;
-	imageInfo.extent.depth = 1;
-	imageInfo.mipLevels = 1;
-	imageInfo.arrayLayers = 1;
-	imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransientAttachment;
-	depthImage = device->createImageUnique(imageInfo);
-
-	auto requirements = device->getImageMemoryRequirements(*depthImage);
-
-	vk::MemoryAllocateInfo allocateInfo{};
-	allocateInfo.allocationSize = requirements.size,
-	allocateInfo.memoryTypeIndex = findMemoryType(requirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-	depthImageMemory = device->allocateMemoryUnique(allocateInfo);
-
-	device->bindImageMemory(*depthImage, *depthImageMemory, 0);
-
-	depthImageView = createImageView(*depthImage, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
-
-	framebuffers.clear();
-
-	for (auto &image: swapchainImageViews) {
-		std::array<vk::ImageView, 2> attachments {
-			*image,
-			*depthImageView,
-		};
-		vk::FramebufferCreateInfo framebufferInfo{};
-		framebufferInfo.renderPass = *renderpass;
-		framebufferInfo.attachmentCount = attachments.size();
-		framebufferInfo.pAttachments = attachments.data();
-		framebufferInfo.width = dimensions.width;
-		framebufferInfo.height = dimensions.height;
-		framebufferInfo.layers = 1;
-
-		framebuffers.emplace_back(device->createFramebufferUnique(framebufferInfo));
-	}
 }
 
 
-// Free resources created from the setSurface call
-// Should do this before we free the surface, so can't just rely on the destructor
-void VulkanState::unsetSurface() {
-	framebuffers.clear();
-	depthImageView.reset();
-	depthImageMemory.reset();
-	depthImage.reset();
+void VulkanState::unsetRenderpass() {
 	renderpass.reset();
-	swapchainFences.clear();
-	swapchainImageViews.clear();
-	swapchainImages.clear();
-	swapchain.reset();
-	surface = nullptr;
 }
+
 
 
 uint32_t VulkanState::findMemoryType(uint32_t mask, vk::MemoryPropertyFlags requiredProperties) {
@@ -286,13 +334,6 @@ vk::UniquePipeline VulkanState::makePipeline(std::vector<uint8_t> vertexShaderCo
 	vk::PipelineInputAssemblyStateCreateInfo inputInfo{};
 	inputInfo.topology = topology;
 
-	viewport = vk::Viewport(
-		0, 0,
-		currentExtent.width, currentExtent.height,
-		0.0, 1.0
-	);
-	scissor.offset = vk::Offset2D(0, 0);
-	scissor.extent = currentExtent;
 	vk::PipelineViewportStateCreateInfo viewportInfo{{}, 1, &viewport, 1, &scissor};
 
 	vk::PipelineRasterizationStateCreateInfo rasterizationInfo{};
@@ -393,17 +434,31 @@ BufferAndMemory VulkanState::createBufferWithData(vk::BufferUsageFlags usage, si
 }
 
 
-std::pair<uint32_t, PerFrame&> VulkanState::acquireImage() {
+// Get next image from the swap chain
+// Pretty leaky abstraction, caller must set e.g. set fence
+std::optional<std::pair<uint32_t, PerFrame&>> VulkanState::acquireImage() {
+	if (shouldRecreateSwapchain) {
+		recreateSwapchain();
+	}
 	PerFrame &frame = perFrame[nextFrame()];
 	// Wait if we already have maximum amount of frames in flight
 	device->waitForFences(*frame.frameFence, true, UINT64_MAX);
-	uint32_t imageIndex = device->acquireNextImageKHR(*swapchain, UINT64_MAX, *frame.acquireImageSemaphore, nullptr);
-	// Could get images out of order, so wait if image is already in use by another frame
-	if (swapchainFences[imageIndex]) {
-		device->waitForFences(swapchainFences[imageIndex], true, UINT64_MAX);
+	try {
+		uint32_t imageIndex = device->acquireNextImageKHR(*swapchain, UINT64_MAX, *frame.acquireImageSemaphore, nullptr);
+		// Could get images out of order, so wait if image is already in use by another frame
+		if (swapchainFences[imageIndex]) {
+			device->waitForFences(swapchainFences[imageIndex], true, UINT64_MAX);
+		}
+		swapchainFences[imageIndex] = *frame.frameFence;
+		return std::pair<uint32_t, PerFrame&>(imageIndex, frame);
+	} catch (vk::OutOfDateKHRError &e) {
+		shouldRecreateSwapchain = true;
+		return {};
 	}
-	swapchainFences[imageIndex] = *frame.frameFence;
-	return {imageIndex, frame};
+}
+
+void VulkanState::requestRecreateSwapchain() {
+	shouldRecreateSwapchain = true;
 }
 
 

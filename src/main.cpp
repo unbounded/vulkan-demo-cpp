@@ -95,7 +95,11 @@ int main(int argc, char** argv) {
 
 	while (!glfwWindowShouldClose(window)) {
 
-		auto [framebufferIndex, perFrame] = vulkan.acquireImage();
+		auto maybeImage = vulkan.acquireImage();
+		if (!maybeImage.has_value()) {
+			continue;
+		}
+		auto [framebufferIndex, perFrame] = *maybeImage;
 
 		double time = glfwGetTime() - startTime;
 		glm::mat4 view = glm::lookAt(
@@ -157,7 +161,12 @@ int main(int argc, char** argv) {
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &*vulkan.swapchain;
 		presentInfo.pImageIndices = &framebufferIndex;
-		vulkan.queue.presentKHR(presentInfo);
+		try {
+			vulkan.queue.presentKHR(presentInfo);
+		} catch (vk::OutOfDateKHRError &e) {
+			vulkan.requestRecreateSwapchain();
+			continue;
+		}
 
 		glfwPollEvents();
 	}

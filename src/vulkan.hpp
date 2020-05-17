@@ -34,6 +34,7 @@ public:
 	vk::UniqueCommandPool commandPool{};
 	vk::SurfaceKHR surface{};
 	vk::Extent2D currentExtent{};
+	vk::SurfaceFormatKHR currentSurfaceFormat;
 	vk::UniqueSwapchainKHR swapchain{};
 	std::vector<vk::Image> swapchainImages{};
 	std::vector<vk::UniqueImageView> swapchainImageViews{};
@@ -48,6 +49,7 @@ public:
 	std::vector<vk::UniqueFramebuffer> framebuffers{};
 	std::array<PerFrame, MAX_FRAMES_IN_FLIGHT> perFrame{};
 	size_t currentFrame{MAX_FRAMES_IN_FLIGHT - 1};
+	bool shouldRecreateSwapchain = false;
 
 	~VulkanState();
 
@@ -56,10 +58,17 @@ public:
 	void unsetSurface();
 	vk::UniquePipeline makePipeline(std::vector<uint8_t> vertexShaderCode, std::vector<uint8_t> fragmentShaderCode, vk::PrimitiveTopology topology);
 	BufferAndMemory createBufferWithData(vk::BufferUsageFlags usage, size_t size, uint8_t *data);
-	std::pair<uint32_t, PerFrame&> acquireImage();
+	std::optional<std::pair<uint32_t, PerFrame&>> acquireImage();
+	void requestRecreateSwapchain();
 
 private:
-	void setupFramebuffers(vk::Extent2D dimensions);
+	void recreateSwapchain();
+	void createSwapchain();
+	void unsetSwapchain();
+	void createRenderpass();
+	void unsetRenderpass();
+	void setupFramebuffers();
+	void unsetFramebuffers();
 	vk::UniqueImageView createImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspects);
 	uint32_t findMemoryType(uint32_t mask, vk::MemoryPropertyFlags requiredProperties);
 	vk::UniqueShaderModule makeShaderModule(std::vector<uint8_t> &code);
